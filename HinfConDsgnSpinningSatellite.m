@@ -7,6 +7,7 @@ Pnom = tf(N,D);
 Pnom = ss(Pnom,'min')
 SystemPole = pole(Pnom);
 SystemZero = tzero(Pnom);
+nmeas = 2; ncon = 2;
 %% Plant with uncertainty
 for i = 1:2
     k(i) = ureal('k',1,'Range',[0.8,1.2]);
@@ -14,7 +15,7 @@ for i = 1:2
     f(i) = k(i)*((-.5*theta(i)*s)+1)/((.5*theta(i)*s)+1);
 end
 P = [f(1) 0;0 f(2)]*Pnom;
-WDelta = (P/Pnom)-1;
+bb = (P-Pnom)*inv(P);
 r0 = 0.2; rinf1 = 2.3; tau = 0.021;
 rinf2 = 100;
 wM = tf([tau r0], [tau/rinf1 1]);
@@ -23,26 +24,7 @@ WM = ss(WM);
 wM2= tf([tau r0], [tau/rinf2 1]);
 WM2 = eye(2)*wM2;
 WM2 = ss(WM2) ;
-%% Multiplicative Output Uncertainty 
-time = [0:0.01:3];
-step_ref = ones(1,length(time));
-ref = [0.1*step_ref' 0*step_ref'];
-ref2 = [0.1*sin(10*time)' 0.1*cos(10*time)'];
-Ms = 2; A = 1e-2; wb = 11.5; 
-wP = tf([1/Ms wb], [1 wb*A]);
-WP = eye(2)*wP; WP = ss(WP) ;
-systemnames = 'Pnom WP2 WM';
-inputvar = '[w(2);u(2)]';
-outputvar = '[WP2;WM;-w-Pnom]';
-input_to_Pnom= '[u]';
-input_to_WP = '[w+Pnom]';
-input_to_WM = ' [Pnom]';
-G = sysic
-nmeas = 2; ncon = 2;
-[Khiold,CLhi,ghiold,hiinfo] = hinfsyn(G,nmeas,ncon);
-Fhiold=loopsens(Pnom,Khiold);
-[SVold,wold] = sigma(CLhi);
-%% Trade off gamma based on Gmax and Gmin
+%% %% Trade off gamma based on Gmax and Gmin
 %Ms = 8 dan wb = 20
 Ms2 = 8;wb2 = 20;
 wP2 = tf([1/Ms2 wb2], [1 wb2*A]);
@@ -59,6 +41,26 @@ Gnew = sysic
 lft_norm = hinfnorm(lft(Gnew,Khi));
 [SV,w] = sigma(CLHi);
 [SVF,wF] = sigma(CLHiF);
+%% Multiplicative Output Uncertainty 
+time = [0:0.01:3];
+step_ref = ones(1,length(time));
+ref = [0.1*step_ref' 0*step_ref'];
+ref2 = [0.1*sin(10*time)' 0.1*cos(10*time)'];
+Ms = 2; A = 1e-2; wb = 11.5; 
+wP = tf([1/Ms wb], [1 wb*A]);
+WP = eye(2)*wP; WP = ss(WP) ;
+systemnames = 'Pnom WP2 WM';
+inputvar = '[w(2);u(2)]';
+outputvar = '[WP2;WM;-w-Pnom]';
+input_to_Pnom= '[u]';
+input_to_WP = '[w+Pnom]';
+input_to_WM = ' [Pnom]';
+G = sysic
+
+[Khiold,CLhi,ghiold,hiinfo] = hinfsyn(G,nmeas,ncon);
+Fhiold=loopsens(Pnom,Khiold);
+[SVold,wold] = sigma(CLhi);
+
 %% Plotting Figure
 figure(1);clf
 pzmap(tf(N,D));
@@ -69,11 +71,16 @@ text(13,20,'$$\bar{\sigma}P(s)$$','Interpreter','latex');
 hold on;
 text(10,-12,'$$\underline{\sigma}P(s)$$','Interpreter','latex')
 title('sigmaplot of P(s)');
-figure(3);bodemag(WDelta(1,1))
-hold on;bodemag(WM(1,1),'r');
+figure(3);sigmaplot(bb)
+hold on;sigmaplot(WM,'r');
 grid on
 title('Weights for Multiplicative Uncertainty')
-legend('$$Wm(s)\Delta(s)$$','$$Wm(s)=\frac{0.021s+0.2}{0.0091s+1}$$','Interpreter','latex')
+legend('$$\bar{\sigma}(\tilde{P}-P)P^{-1}$$','$$Wm(s)=\frac{0.021s+0.2}{0.0091s+1}$$','Interpreter','latex')
+figure(3);sigmaplot(bb,'b')
+hold on;sigmaplot(WM,'r');
+grid on
+title('Weights for Multiplicative Uncertainty')
+legend('$$\bar{\sigma}(\tilde{P}-P)P^{-1}$$','$$Wm(s)=\frac{0.021s+0.2}{0.0091s+1}$$','Interpreter','latex')
 figure(4);bodemag(wM,'b');hold on;bodemag(wM2,'r');
 legend('r(\infty) =2.3','r(\infty) = 100')
 figure(5);clf
